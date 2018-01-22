@@ -17,6 +17,16 @@ error() {
 [ -d ~/.yt/. ] || { mkdir -p ~/.yt; error 1 "No API key."; }
 [ -e ~/.yt/key ] || { mkdir -p ~/.yt; error 1 "No API key file."; }
 
+declare -a wants=(
+    curl sed jq
+    tr cat mktemp rm od
+)
+for p in "${wants[@]}"; do
+    x=$(type -P "$p")
+    [ -z "$x" -o ! -x "$x" ] || continue
+    error 1 "No '$p' available."
+done
+
 temp="$(mktemp -p /tmp)"
 [ -f "$temp" ] || error 1 "Cannot write to /tmp/."
 trap "rm -f '${temp}'" EXIT
