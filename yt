@@ -1,0 +1,124 @@
+#!/bin/bash
+
+exe=$(readlink -f "$0")
+ui=en
+
+API='https://translate.yandex.net/api/v1.5/tr.json'
+
+say() { echo "$@" >&2; }
+
+error() {
+    local -i rc="$1"
+    shift
+    say "$@"
+    exit $rc
+}
+
+[ -d ~/.yt/. ] || { mkdir -p ~/.yt; error 1 "No API key."; }
+[ -e ~/.yt/key ] || { mkdir -p ~/.yt; error 1 "No API key file."; }
+
+temp="$(mktemp -p /tmp)"
+[ -f "$temp" ] || error 1 "Cannot write to /tmp/."
+trap "rm -f '${temp}'" EXIT
+
+_fetch() { curl -Ssk "$@"; }
+
+fetch() {
+    _fetch "$@" > "$temp"
+    local code=$(jq .code < "$temp")
+    if [ "$code" = 200 ]; then
+        : # that's ok
+    elif [ "$code" != null ]; then
+        local msg=$(jq .message < "$temp")
+        local -A rcx=(
+            [401]='Bad API key'
+            [402]='API key banned'
+            [404]='Daily limit exceeded'
+            [413]='Text size exceeded'
+            [422]='Cannot translate text'
+            [501]='Unsupported lang pair'
+        )
+        [ -n "$msg" ] || msg="= ${rcx[$code]}"
+        error 1 "Error #${code}: ${msg}"
+    fi
+    cat "$temp"
+}
+
+api_call() {
+    local fn="$1" ; shift
+    local tail=$(echo -n "$@" | tr -s '[:space:]' ' ' | sed -e 's/\s\+\(\w\+=\)/\&\1/g')
+    local url="${API}/${fn}?key=${APIKEY}${tail:+&}${tail}"
+    fetch "${url}"
+}
+
+lang_list() {
+    api_call getLangs ui=$ui
+    # &callback=<имя callback-функции>
+    #   {
+    #     "dirs": [
+    #         "az-ru",
+    #         "be-bg",
+    #         "be-cs",
+    #         "be-de",
+    #         ...
+    #     ],
+    #     "langs": {
+    #         "af": "Afrikaans",
+    #         "am": "Amharic",
+    #         "ar": "Arabic",
+    #         "az": "Azerbaijani",
+    #         ...
+    #     }
+    #   }
+
+}
+
+c2x() {
+    echo -n "$*" |
+    od -vtxC -Anone |           # space prefixed, charwise, 2-hex per char
+    tr -d '\n' |                # join lines
+    tr '[:lower:]' '[:upper:]'  # uppercase hex
+}
+
+urlencode() { c2x "$@" | tr ' ' '%'; }  # 'A' -> '%41' for all, easy way
+
+detect_lang() {
+    local hint='en,ru'
+    api_call detect "text=$(urlencode "$@")" "hint=${hint}"
+    # { "code": 200, "lang": "en" }
+}
+
+whereto() {
+    local s="$(echo -n "$@" | tr -s '[:space:]' ' ')"
+    local l="$(echo -n "$s" | tr -dc '[:alpha:]')"
+
+    # say "#l=${#l} #s=${#s} $(( ${#s} / 2 ))"
+
+    (( ${#l} < ( ${#s} / 2 ) )) && echo 'ru-en' || echo 'ru'
+}
+
+translate() {
+    local to=ru # where to translate to ('ru') or lang pair (like 'en-ru')
+    if [[ "$1" =~ ^[a-z]{2,2}(-[a-z]{2,2})?$ ]]; then
+        to="$1"
+        shift
+    else
+        to=$(whereto "$@")
+    fi
+    local fm=plain # text format ('plain' or 'html')
+    api_call translate "text=$(urlencode "$@")" "lang=${to}" "format=${fm}"
+    # &options= ?????
+    # { "code": 200, "lang": "en-ru", "text": [ "Здравствуй, Мир!" ] }
+}
+
+output() { if [ -t 1 ]; then jq ${1:-.}; else cat; fi; }
+
+# see https://translate.yandex.ru/developers/keys
+source ~/.yt/key
+
+[ "$1" != -l ] || { lang_list | output; exit; }
+[ "$1" != -L ] || { shift; detect_lang "$@" | output; exit; }
+[ $# -gt 0 ] && { translate "$@" | output .text[]; } ||
+error 1 "Usage: $(basename ${exe}) [-l|-L] [<lang1>[-<lang2>]] text"
+
+# EOF #
