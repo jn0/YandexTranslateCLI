@@ -15,4 +15,12 @@
 - `yt <lang1>[-<lang2>] <text>` to translate the _\<text>_ from _\<lang1>_ to _\<lang2>_
 - `yt <text>` to translate the _\<text>_ in guessed terms
 
+## Depends on
+
+- `bash`
+- `curl`
+- `sed`
+- `jq` (needs `epel-release` on CentOS)
+- `tr`, `cat`, `mktemp`, `rm`, `od` (usually from `coreutils`)
+
 # EOF #
