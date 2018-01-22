@@ -1,0 +1,2 @@
+# YandexTranslateCLI
+Yandex.Translate CLI
