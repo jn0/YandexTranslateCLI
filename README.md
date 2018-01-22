@@ -6,7 +6,8 @@
 2. put it into `~/.yt/key` file as  
 `APIKEY=trnsl.9.9.9999999999999999.9999999999999999.9999999999999999999999999999999999999999`  
 (the file is `source`d!)
-3. place the `yt` script to a directory in your `$PATH` (say, to `~/bin/`)
+3. place the `yt` script to a directory in your `$PATH` (say, to `~/bin/`)  
+or run `make install`
 
 ## Usage
 
